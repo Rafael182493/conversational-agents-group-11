@@ -41,27 +41,28 @@ def init_db(db_path: str) -> sessionmaker:
 
 def create_session(session_factory: sessionmaker, user_id: Optional[str] = None) -> Session:
     """Create a new session."""
-    Session = session_factory
-    session = Session()
+    db_session = session_factory()
     try:
-        new_session = Session(user_id=user_id)
-        session.add(new_session)
-        session.commit()
+        new_session = Session(
+            start_time=datetime.utcnow(),
+            user_id=user_id
+        )
+        db_session.add(new_session)
+        db_session.commit()
         return new_session
     finally:
-        session.close()
+        db_session.close()
 
 def end_session(session_factory: sessionmaker, session_id: int) -> None:
     """End a session by setting its end time."""
-    Session = session_factory
-    session = Session()
+    db_session = session_factory()
     try:
-        db_session = session.query(Session).filter_by(id=session_id).first()
-        if db_session:
-            db_session.end_time = datetime.utcnow()
-            session.commit()
+        session = db_session.query(Session).filter_by(id=session_id).first()
+        if session:
+            session.end_time = datetime.utcnow()
+            db_session.commit()
     finally:
-        session.close()
+        db_session.close()
 
 def store_interaction(
     session_factory: sessionmaker,
@@ -72,8 +73,7 @@ def store_interaction(
     audio_duration: Optional[float] = None,
 ) -> Interaction:
     """Store a new interaction in the database."""
-    Session = session_factory
-    session = Session()
+    db_session = session_factory()
     
     try:
         interaction = Interaction(
@@ -83,44 +83,41 @@ def store_interaction(
             confidence_score=confidence_score,
             audio_duration=audio_duration,
         )
-        session.add(interaction)
-        session.commit()
+        db_session.add(interaction)
+        db_session.commit()
         return interaction
     finally:
-        session.close()
+        db_session.close()
 
 def get_session_interactions(
     session_factory: sessionmaker, session_id: int
 ) -> List[Interaction]:
     """Retrieve all interactions for a specific session."""
-    Session = session_factory
-    session = Session()
+    db_session = session_factory()
     
     try:
-        return session.query(Interaction).filter_by(session_id=session_id).all()
+        return db_session.query(Interaction).filter_by(session_id=session_id).all()
     finally:
-        session.close()
+        db_session.close()
 
 def get_user_sessions(
     session_factory: sessionmaker, user_id: str
 ) -> List[Session]:
     """Retrieve all sessions for a specific user."""
-    Session = session_factory
-    session = Session()
+    db_session = session_factory()
     
     try:
-        return session.query(Session).filter_by(user_id=user_id).all()
+        return db_session.query(Session).filter_by(user_id=user_id).all()
     finally:
-        session.close()
+        db_session.close()
 
 def delete_user_data(session_factory: sessionmaker, user_id: str) -> None:
     """Delete all data associated with a user (GDPR compliance)."""
-    Session = session_factory
-    session = Session()
+    db_session = session_factory()
     
     try:
         # This will cascade delete all associated interactions
-        session.query(Session).filter_by(user_id=user_id).delete()
-        session.commit()
+        db_session.query(Session).filter_by(user_id=user_id).delete()
+        db_session.commit()
     finally:
-        session.close() 
+        db_session.close() 
