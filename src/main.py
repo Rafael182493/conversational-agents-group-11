@@ -19,7 +19,7 @@ class SpeechEmotionAgent:
         self,
         db_path: str,
         whisper_model: str = "base",
-        emotion_model: str = "r-f/wav2vec-english-speech-emotion-recognition",
+        emotion_model: str = "wav2vec2-emotion",
         device_id: Optional[int] = None
     ):
         """Initialize the speech emotion agent."""
@@ -28,20 +28,22 @@ class SpeechEmotionAgent:
         self.emotion_recognizer = EmotionRecognizer(model_name=emotion_model)
         self.db_session_factory = init_db(db_path)
         self.device_id = device_id
-        self.current_session = None
+        self.current_session_id = None
 
     def start_session(self, user_id: Optional[str] = None) -> None:
         """Start a new conversation session."""
-        self.current_session = create_session(self.db_session_factory, user_id)
-        print(f"\nStarted new session with ID: {self.current_session.id}")
+        session = create_session(self.db_session_factory, user_id)
+        self.current_session_id = session.id
+        print(f"\nStarted new session with ID: {self.current_session_id}")
 
     def end_current_session(self) -> None:
         """End the current session."""
-        if self.current_session:
-            end_session(self.db_session_factory, self.current_session.id)
-            print(f"\nEnded session {self.current_session.id}")
+        if self.current_session_id is not None:
+            end_session(self.db_session_factory, self.current_session_id)
+            print(f"\nEnded session {self.current_session_id}")
+            
             # Print session summary
-            interactions = get_session_interactions(self.db_session_factory, self.current_session.id)
+            interactions = get_session_interactions(self.db_session_factory, self.current_session_id)
             print("\nSession Summary:")
             print("-" * 50)
             for interaction in interactions:
@@ -49,7 +51,7 @@ class SpeechEmotionAgent:
                 print(f"Transcript: {interaction.transcript}")
                 print(f"Emotion: {interaction.emotion_label} (confidence: {interaction.confidence_score:.2f})")
                 print("-" * 50)
-            self.current_session = None
+            self.current_session_id = None
 
     def process_interaction(
         self,
@@ -57,7 +59,7 @@ class SpeechEmotionAgent:
         save_audio: bool = False
     ) -> None:
         """Record and process a single interaction."""
-        if not self.current_session:
+        if self.current_session_id is None:
             raise RuntimeError("No active session. Call start_session() first.")
 
         try:
@@ -93,7 +95,7 @@ class SpeechEmotionAgent:
             # Store in database
             interaction = store_interaction(
                 self.db_session_factory,
-                session_id=self.current_session.id,
+                session_id=self.current_session_id,
                 transcript=transcript,
                 emotion_label=emotion,
                 confidence_score=emotion_confidence,
@@ -182,7 +184,7 @@ def main():
         return 1
     finally:
         # End the session
-        if agent.current_session:
+        if agent.current_session_id is not None:
             agent.end_current_session()
 
     return 0
