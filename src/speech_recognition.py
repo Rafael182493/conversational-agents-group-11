@@ -10,6 +10,8 @@ from scipy import signal
 class SpeechRecognizer:
     def __init__(self, model_name: str = "base"):
         """Initialize the speech recognizer with a Whisper model."""
+        # Whisper models are automatically cached by the library in ~/.cache/whisper
+        print(f"Loading Whisper model '{model_name}'...")
         self.model = whisper.load_model(model_name)
         self.sample_rate = 16000  # Whisper expects 16kHz
 

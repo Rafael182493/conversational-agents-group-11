@@ -5,16 +5,34 @@ from transformers import (
     Wav2Vec2FeatureExtractor,
     Wav2Vec2ForSequenceClassification,
 )
+import os
 
 class EmotionRecognizer:
     def __init__(
         self,
-        model_name: str = "r-f/wav2vec-english-speech-emotion-recognition"
+        model_name: str = "wav2vec2-emotion",
+        model_path: str = "models"
     ):
         """Initialize the emotion recognizer with a Wav2Vec2 model."""
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(model_name)
-        self.model = Wav2Vec2ForSequenceClassification.from_pretrained(model_name).to(self.device)
+        model_dir = os.path.join(model_path, model_name)
+        
+        if not os.path.exists(model_dir):
+            print(f"Local model not found at {model_dir}, downloading from HuggingFace...")
+            model_name = "r-f/wav2vec-english-speech-emotion-recognition"
+            self.feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(model_name)
+            self.model = Wav2Vec2ForSequenceClassification.from_pretrained(model_name)
+            
+            # Save models locally
+            os.makedirs(model_dir, exist_ok=True)
+            self.feature_extractor.save_pretrained(model_dir)
+            self.model.save_pretrained(model_dir)
+        else:
+            print(f"Loading model from {model_dir}")
+            self.feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(model_dir)
+            self.model = Wav2Vec2ForSequenceClassification.from_pretrained(model_dir)
+        
+        self.model = self.model.to(self.device)
         self.id2label = self.model.config.id2label
         self.sample_rate = self.feature_extractor.sampling_rate
 

@@ -2,10 +2,17 @@ import os
 from pathlib import Path
 import argparse
 from typing import Optional
+from datetime import datetime
 
 from speech_recognition import SpeechRecognizer
 from emotion_recognition import EmotionRecognizer
-from database import init_db, store_interaction
+from database import (
+    init_db,
+    store_interaction,
+    create_session,
+    end_session,
+    get_session_interactions
+)
 
 class SpeechEmotionAgent:
     def __init__(
@@ -21,14 +28,38 @@ class SpeechEmotionAgent:
         self.emotion_recognizer = EmotionRecognizer(model_name=emotion_model)
         self.db_session_factory = init_db(db_path)
         self.device_id = device_id
+        self.current_session = None
+
+    def start_session(self, user_id: Optional[str] = None) -> None:
+        """Start a new conversation session."""
+        self.current_session = create_session(self.db_session_factory, user_id)
+        print(f"\nStarted new session with ID: {self.current_session.id}")
+
+    def end_current_session(self) -> None:
+        """End the current session."""
+        if self.current_session:
+            end_session(self.db_session_factory, self.current_session.id)
+            print(f"\nEnded session {self.current_session.id}")
+            # Print session summary
+            interactions = get_session_interactions(self.db_session_factory, self.current_session.id)
+            print("\nSession Summary:")
+            print("-" * 50)
+            for interaction in interactions:
+                print(f"Time: {interaction.timestamp}")
+                print(f"Transcript: {interaction.transcript}")
+                print(f"Emotion: {interaction.emotion_label} (confidence: {interaction.confidence_score:.2f})")
+                print("-" * 50)
+            self.current_session = None
 
     def process_interaction(
         self,
         duration: float = 5.0,
-        user_id: Optional[str] = None,
         save_audio: bool = False
     ) -> None:
         """Record and process a single interaction."""
+        if not self.current_session:
+            raise RuntimeError("No active session. Call start_session() first.")
+
         try:
             # Record audio
             print("Listening...")
@@ -62,10 +93,10 @@ class SpeechEmotionAgent:
             # Store in database
             interaction = store_interaction(
                 self.db_session_factory,
+                session_id=self.current_session.id,
                 transcript=transcript,
                 emotion_label=emotion,
                 confidence_score=emotion_confidence,
-                user_id=user_id,
                 audio_duration=actual_duration
             )
             print(f"\nStored interaction with ID: {interaction.id}")
@@ -109,6 +140,11 @@ def main():
         type=int,
         help="Audio input device ID"
     )
+    parser.add_argument(
+        "--continuous",
+        action="store_true",
+        help="Run in continuous mode, processing multiple interactions"
+    )
 
     args = parser.parse_args()
 
@@ -123,17 +159,31 @@ def main():
     )
 
     try:
-        # Process a single interaction
-        agent.process_interaction(
-            duration=args.duration,
-            user_id=args.user_id,
-            save_audio=args.save_audio
-        )
+        # Start a new session
+        agent.start_session(user_id=args.user_id)
+
+        if args.continuous:
+            print("\nRunning in continuous mode. Press Ctrl+C to stop.")
+            while True:
+                agent.process_interaction(
+                    duration=args.duration,
+                    save_audio=args.save_audio
+                )
+        else:
+            # Process a single interaction
+            agent.process_interaction(
+                duration=args.duration,
+                save_audio=args.save_audio
+            )
     except KeyboardInterrupt:
         print("\nStopping...")
     except Exception as e:
         print(f"Error: {str(e)}")
         return 1
+    finally:
+        # End the session
+        if agent.current_session:
+            agent.end_current_session()
 
     return 0
 
