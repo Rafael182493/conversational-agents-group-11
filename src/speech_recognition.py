@@ -28,7 +28,16 @@ class SpeechRecognizer:
             device=device
         )
         sd.wait()
-        return audio.flatten(), duration
+        audio = audio.flatten()
+        
+        # Check audio levels
+        audio_max = np.max(np.abs(audio))
+        if audio_max < 0.01:  # Very quiet
+            print("Warning: Audio level is very low")
+        elif audio_max > 0.9:  # Close to clipping
+            print("Warning: Audio level is very high, might be clipping")
+            
+        return audio, duration
 
     def load_audio(self, file_path: str) -> Tuple[np.ndarray, float]:
         """Load audio from file and resample if necessary."""
@@ -51,15 +60,22 @@ class SpeechRecognizer:
         # Check if audio is completely silent
         if np.all(audio == 0) or np.allclose(audio, 0, atol=1e-7):
             print("Warning: Detected silent audio")
-            return audio
+            return np.zeros_like(audio)
         
         # Normalize audio (safely)
         max_abs = np.max(np.abs(audio))
         if max_abs > 0:
             audio = audio / max_abs
+        else:
+            return np.zeros_like(audio)
         
-        # Apply simple noise reduction (you might want to use more sophisticated methods)
-        audio = signal.medfilt(audio, kernel_size=3)
+        # Apply noise reduction
+        # Use a larger kernel size for better noise reduction
+        audio = signal.medfilt(audio, kernel_size=5)
+        
+        # Apply a simple noise gate
+        noise_gate = 0.01
+        audio[np.abs(audio) < noise_gate] = 0
         
         return audio
 
@@ -70,21 +86,36 @@ class SpeechRecognizer:
         Transcribe audio using Whisper.
         Returns transcript and confidence score.
         """
-        # Preprocess audio
-        audio = self.preprocess_audio(audio)
-        
-        # Get transcription
-        result = self.model.transcribe(
-            audio,
-            language=language,
-            fp16=False  # Use float32 for better compatibility
-        )
-        
-        transcript = result["text"].strip()
-        # Average confidence across segments
-        confidence = np.mean([segment["confidence"] for segment in result["segments"]])
-        
-        return transcript, confidence
+        try:
+            # Preprocess audio
+            audio = self.preprocess_audio(audio)
+            
+            # Skip transcription if audio is silent
+            if np.all(audio == 0) or np.allclose(audio, 0, atol=1e-7):
+                return "", 0.0
+            
+            # Get transcription
+            result = self.model.transcribe(
+                audio,
+                language=language,
+                fp16=False  # Use float32 for better compatibility
+            )
+            
+            transcript = result["text"].strip()
+            
+            # Handle empty transcript
+            if not transcript:
+                return "", 0.0
+                
+            # Safely calculate confidence
+            confidences = [segment.get("confidence", 0.0) for segment in result["segments"]]
+            confidence = np.mean(confidences) if confidences else 0.0
+            
+            return transcript, confidence
+            
+        except Exception as e:
+            print(f"Error in transcription: {str(e)}")
+            return "", 0.0
 
     def save_audio(self, audio: np.ndarray, file_path: str) -> None:
         """Save audio to file."""

@@ -1,4 +1,4 @@
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Optional
 import torch
 import numpy as np
 from transformers import (
@@ -6,6 +6,7 @@ from transformers import (
     Wav2Vec2ForSequenceClassification,
 )
 import os
+import librosa
 
 class EmotionRecognizer:
     def __init__(
@@ -45,23 +46,34 @@ class EmotionRecognizer:
             - dictionary of all emotion probabilities
         """
         try:
-            # Check if audio is completely silent or too quiet
-            if np.all(audio == 0) or np.allclose(audio, 0, atol=1e-7) or np.max(np.abs(audio)) < 1e-6:
-                print("Warning: Audio is silent or too quiet. Defaulting to neutral emotion.")
+            # Validate audio input
+            if audio is None or len(audio) == 0:
+                print("Warning: Empty audio input")
                 return "neutral", 1.0, {"neutral": 1.0}
-
+                
+            # Check for silent audio
+            if np.all(audio == 0) or np.allclose(audio, 0, atol=1e-7):
+                print("Warning: Silent audio detected")
+                return "neutral", 1.0, {"neutral": 1.0}
+                
+            # Extract features
+            features = self.extract_features(audio)
+            if features is None:
+                print("Warning: Could not extract features")
+                return "neutral", 1.0, {"neutral": 1.0}
+                
             # Ensure audio is float32
-            if audio.dtype != np.float32:
-                audio = audio.astype(np.float32)
+            if features.dtype != np.float32:
+                features = features.astype(np.float32)
 
             # Normalize audio if needed
-            max_abs = np.max(np.abs(audio))
+            max_abs = np.max(np.abs(features))
             if max_abs > 0:
-                audio = audio / max_abs
+                features = features / max_abs
 
             # Extract features
             inputs = self.feature_extractor(
-                audio,
+                features,
                 sampling_rate=self.sample_rate,
                 return_tensors="pt",
                 padding=True,
@@ -99,4 +111,80 @@ class EmotionRecognizer:
 
     def get_available_emotions(self) -> list[str]:
         """Return list of emotions that the model can recognize."""
-        return list(self.id2label.values()) 
+        return list(self.id2label.values())
+
+    def process_audio(self, audio: np.ndarray) -> str:
+        """Process audio and return detected emotion."""
+        try:
+            # Validate audio input
+            if audio is None or len(audio) == 0:
+                print("Warning: Empty audio input")
+                return "neutral"
+                
+            # Check for silent audio
+            if np.all(audio == 0) or np.allclose(audio, 0, atol=1e-7):
+                print("Warning: Silent audio detected")
+                return "neutral"
+                
+            # Extract features
+            features = self.extract_features(audio)
+            if features is None:
+                print("Warning: Could not extract features")
+                return "neutral"
+                
+            # Make prediction
+            prediction = self.model.predict(features.reshape(1, -1))
+            
+            # Handle NaN or invalid predictions
+            if np.any(np.isnan(prediction)) or len(prediction) == 0:
+                print("Warning: Invalid model prediction")
+                return "neutral"
+                
+            # Get emotion label
+            emotion = self.label_encoder.inverse_transform(prediction)[0]
+            return emotion
+            
+        except Exception as e:
+            print(f"Error in emotion recognition: {str(e)}")
+            return "neutral"
+            
+    def extract_features(self, audio: np.ndarray) -> Optional[np.ndarray]:
+        """Extract audio features for emotion recognition."""
+        try:
+            # Ensure audio is not empty
+            if len(audio) == 0:
+                return None
+                
+            # Normalize audio
+            audio = audio / np.max(np.abs(audio)) if np.max(np.abs(audio)) > 0 else audio
+            
+            # Extract MFCC features
+            mfccs = librosa.feature.mfcc(
+                y=audio,
+                sr=self.sample_rate,
+                n_mfcc=40,
+                hop_length=512,
+                n_fft=2048
+            )
+            
+            # Extract additional features
+            chroma = librosa.feature.chroma_stft(y=audio, sr=self.sample_rate)
+            mel = librosa.feature.melspectrogram(y=audio, sr=self.sample_rate)
+            
+            # Combine features
+            features = np.concatenate([
+                np.mean(mfccs, axis=1),
+                np.mean(chroma, axis=1),
+                np.mean(mel, axis=1)
+            ])
+            
+            # Check for NaN values
+            if np.any(np.isnan(features)):
+                print("Warning: NaN values in extracted features")
+                return None
+                
+            return features
+            
+        except Exception as e:
+            print(f"Error in feature extraction: {str(e)}")
+            return None 

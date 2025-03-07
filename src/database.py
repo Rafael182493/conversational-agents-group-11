@@ -99,7 +99,21 @@ def store_interaction(
         )
         db_session.add(interaction)
         db_session.commit()
-        return interaction
+        
+        # Refresh to get the generated ID and timestamp
+        db_session.refresh(interaction)
+        
+        # Create a detached copy with all attributes
+        detached_interaction = Interaction(
+            id=interaction.id,
+            session_id=interaction.session_id,
+            timestamp=interaction.timestamp,
+            transcript=interaction.transcript,
+            emotion_label=interaction.emotion_label,
+            confidence_score=interaction.confidence_score,
+            audio_duration=interaction.audio_duration
+        )
+        return detached_interaction
     finally:
         db_session.close()
 
