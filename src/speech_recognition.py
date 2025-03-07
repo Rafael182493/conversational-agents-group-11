@@ -48,8 +48,15 @@ class SpeechRecognizer:
 
     def preprocess_audio(self, audio: np.ndarray) -> np.ndarray:
         """Apply preprocessing to the audio signal."""
-        # Normalize audio
-        audio = audio / np.max(np.abs(audio))
+        # Check if audio is completely silent
+        if np.all(audio == 0) or np.allclose(audio, 0, atol=1e-7):
+            print("Warning: Detected silent audio")
+            return audio
+        
+        # Normalize audio (safely)
+        max_abs = np.max(np.abs(audio))
+        if max_abs > 0:
+            audio = audio / max_abs
         
         # Apply simple noise reduction (you might want to use more sophisticated methods)
         audio = signal.medfilt(audio, kernel_size=3)

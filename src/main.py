@@ -3,6 +3,7 @@ from pathlib import Path
 import argparse
 from typing import Optional
 from datetime import datetime
+import numpy as np
 
 from speech_recognition import SpeechRecognizer
 from emotion_recognition import EmotionRecognizer
@@ -77,6 +78,11 @@ class SpeechEmotionAgent:
                 device=self.device_id
             )
 
+            # Check if audio is too quiet
+            if np.all(audio == 0) or np.allclose(audio, 0, atol=1e-7):
+                print("\nNo audio detected. Please try speaking louder.")
+                return
+
             # Save audio if requested
             if save_audio:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -87,28 +93,43 @@ class SpeechEmotionAgent:
                 print(f"Audio saved to: {audio_path}")
 
             # Get transcript
-            transcript, transcript_confidence = self.speech_recognizer.transcribe(audio)
-            print(f"\nTranscript: {transcript}")
-            print(f"Transcript confidence: {transcript_confidence:.2f}")
+            try:
+                transcript, transcript_confidence = self.speech_recognizer.transcribe(audio)
+                print(f"\nTranscript: {transcript}")
+                print(f"Transcript confidence: {transcript_confidence:.2f}")
+            except Exception as e:
+                print(f"\nError in transcription: {str(e)}")
+                transcript = "transcription failed"
+                transcript_confidence = 0.0
 
             # Get emotion
-            emotion, emotion_confidence, emotion_probs = self.emotion_recognizer.predict_emotion(audio)
-            print(f"\nDetected emotion: {emotion}")
-            print(f"Emotion confidence: {emotion_confidence:.2f}")
-            print("\nEmotion probabilities:")
-            for emotion_label, prob in emotion_probs.items():
-                print(f"  {emotion_label}: {prob:.2f}")
+            try:
+                emotion, emotion_confidence, emotion_probs = self.emotion_recognizer.predict_emotion(audio)
+                print(f"\nDetected emotion: {emotion}")
+                print(f"Emotion confidence: {emotion_confidence:.2f}")
+                print("\nEmotion probabilities:")
+                for emotion_label, prob in emotion_probs.items():
+                    print(f"  {emotion_label}: {prob:.2f}")
+            except Exception as e:
+                print(f"\nError in emotion detection: {str(e)}")
+                emotion = "unknown"
+                emotion_confidence = 0.0
+                emotion_probs = {}
 
-            # Store in database
-            interaction = store_interaction(
-                self.db_session_factory,
-                session_id=self.current_session_id,
-                transcript=transcript,
-                emotion_label=emotion,
-                confidence_score=emotion_confidence,
-                audio_duration=actual_duration
-            )
-            print(f"\nStored interaction with ID: {interaction.id}")
+            # Only store if we have some meaningful content
+            if transcript != "transcription failed" or emotion != "unknown":
+                # Store in database
+                interaction = store_interaction(
+                    self.db_session_factory,
+                    session_id=self.current_session_id,
+                    transcript=transcript,
+                    emotion_label=emotion,
+                    confidence_score=emotion_confidence,
+                    audio_duration=actual_duration
+                )
+                print(f"\nStored interaction with ID: {interaction.id}")
+            else:
+                print("\nSkipping storage due to failed processing")
 
         except Exception as e:
             print(f"Error processing interaction: {str(e)}")
