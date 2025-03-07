@@ -1,0 +1,24 @@
+# Core dependencies
+numpy>=1.21.0
+torch>=2.0.0
+torchaudio>=2.0.0
+transformers>=4.30.0
+openai-whisper>=20231117
+sounddevice>=0.4.6
+soundfile>=0.12.1
+scipy>=1.10.0
+
+# Database
+SQLAlchemy>=2.0.0
+
+# Audio processing
+librosa>=0.10.0
+pyaudio>=0.2.13
+
+# Testing
+pytest>=7.4.0
+
+# Type checking and linting
+mypy>=1.5.0
+black>=23.7.0
+flake8>=6.1.0 
