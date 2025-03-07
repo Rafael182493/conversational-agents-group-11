@@ -32,9 +32,16 @@ class SpeechEmotionAgent:
 
     def start_session(self, user_id: Optional[str] = None) -> None:
         """Start a new conversation session."""
-        session = create_session(self.db_session_factory, user_id)
-        self.current_session_id = session.id
-        print(f"\nStarted new session with ID: {self.current_session_id}")
+        try:
+            session = create_session(self.db_session_factory, user_id)
+            self.current_session_id = session.id if session else None
+            if self.current_session_id:
+                print(f"\nStarted new session with ID: {self.current_session_id}")
+            else:
+                raise RuntimeError("Failed to create new session")
+        except Exception as e:
+            print(f"Error starting session: {str(e)}")
+            raise
 
     def end_current_session(self) -> None:
         """End the current session."""

@@ -49,7 +49,21 @@ def create_session(session_factory: sessionmaker, user_id: Optional[str] = None)
         )
         db_session.add(new_session)
         db_session.commit()
-        return new_session
+        
+        # Refresh the session to get the generated ID
+        db_session.refresh(new_session)
+        
+        # Create a copy of the relevant attributes
+        session_id = new_session.id
+        session_start = new_session.start_time
+        session_user = new_session.user_id
+        
+        # Create a new detached session object with the copied attributes
+        return Session(
+            id=session_id,
+            start_time=session_start,
+            user_id=session_user
+        )
     finally:
         db_session.close()
 
