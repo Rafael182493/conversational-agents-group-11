@@ -8,7 +8,7 @@ import soundfile as sf
 from scipy import signal
 
 class SpeechRecognizer:
-    def __init__(self, model_name: str = "base"):
+    def __init__(self, model_name: str = "medium"):
         """Initialize the speech recognizer with a Whisper model."""
         # Whisper models are automatically cached by the library in ~/.cache/whisper
         print(f"Loading Whisper model '{model_name}'...")
@@ -123,5 +123,42 @@ class SpeechRecognizer:
         sf.write(file_path, audio, self.sample_rate)
 
 def get_available_devices() -> list[dict]:
-    """Get list of available audio input devices."""
-    return sd.query_devices() 
+    """Get list of available audio input devices.
+    
+    Returns:
+        list[dict]: List of dictionaries containing device information:
+            - id: Device index
+            - name: Device name
+            - channels: Number of input channels
+            - default: Whether this is the default input device
+            - samplerate: Default samplerate
+    """
+    devices = sd.query_devices()
+    input_devices = []
+    
+    for i, device in enumerate(devices):
+        # Only include devices with input channels
+        if device['max_input_channels'] > 0:
+            input_devices.append({
+                'id': i,
+                'name': device['name'],
+                'channels': device['max_input_channels'],
+                'default': i == sd.default.device[0],
+                'samplerate': device['default_samplerate']
+            })
+    
+    return input_devices
+
+def print_available_devices() -> None:
+    """Print all available input devices in a formatted way."""
+    devices = get_available_devices()
+    
+    print("\nAvailable Input Devices:")
+    print("-" * 60)
+    for device in devices:
+        default_marker = " (Default)" if device['default'] else ""
+        print(f"Device ID: {device['id']}{default_marker}")
+        print(f"Name: {device['name']}")
+        print(f"Input Channels: {device['channels']}")
+        print(f"Sample Rate: {device['samplerate']} Hz")
+        print("-" * 60) 

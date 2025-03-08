@@ -5,7 +5,7 @@ from typing import Optional
 from datetime import datetime
 import numpy as np
 
-from speech_recognition import SpeechRecognizer
+from speech_recognition import SpeechRecognizer, print_available_devices, get_available_devices
 from emotion_recognition import EmotionRecognizer
 from database import (
     init_db,
@@ -166,9 +166,14 @@ def main():
         help="Save recorded audio to file"
     )
     parser.add_argument(
+        "--list-devices",
+        action="store_true",
+        help="List available audio input devices and exit"
+    )
+    parser.add_argument(
         "--device-id",
         type=int,
-        help="Audio input device ID"
+        help="Audio input device ID (use --list-devices to see available devices)"
     )
     parser.add_argument(
         "--continuous",
@@ -178,8 +183,23 @@ def main():
 
     args = parser.parse_args()
 
+    # If --list-devices is specified, print devices and exit
+    if args.list_devices:
+        print_available_devices()
+        return 0
+
     # Create data directory if it doesn't exist
     os.makedirs(os.path.dirname(args.db_path), exist_ok=True)
+
+    # Validate device ID if specified
+    if args.device_id is not None:
+        available_devices = get_available_devices()
+        device_ids = [d['id'] for d in available_devices]
+        if args.device_id not in device_ids:
+            print(f"Error: Device ID {args.device_id} not found in available devices.")
+            print("\nAvailable devices:")
+            print_available_devices()
+            return 1
 
     # Initialize agent
     agent = SpeechEmotionAgent(
