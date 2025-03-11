@@ -64,19 +64,31 @@ class SpeechEmotionAgent:
     def process_interaction(
         self,
         duration: float = 5.0,
-        save_audio: bool = False
+        save_audio: bool = False,
+        audio_file: str = None
     ) -> None:
         """Record and process a single interaction."""
         if self.current_session_id is None:
             raise RuntimeError("No active session. Call start_session() first.")
 
         try:
-            # Record audio
-            print("Listening...")
-            audio, actual_duration = self.speech_recognizer.record_audio(
-                duration=duration,
-                device=self.device_id
-            )
+            # Load audio
+            if audio_file:
+                print("Loading audio...")
+                # Check if file exists
+                if not os.path.isfile(audio_file):
+                    raise FileNotFoundError(f"Audio file not found: {audio_file}")
+                
+                # Normalize path (resolves any .. or . in the path)
+                audio_file = os.path.normpath(audio_file)
+                audio, actual_duration = self.speech_recognizer.load_audio(audio_file)
+            else:
+                # Record audio
+                print("Listening...")
+                audio, actual_duration = self.speech_recognizer.record_audio(
+                    duration=duration,
+                    device=self.device_id
+                )
 
             # Check if audio is too quiet
             if np.all(audio == 0) or np.allclose(audio, 0, atol=1e-7):
@@ -180,6 +192,12 @@ def main():
         action="store_true",
         help="Run in continuous mode, processing multiple interactions"
     )
+    parser.add_argument(
+        "--audio-file",
+        type=str,
+        default=None,
+        help="Audio file to load instead of recording"
+    )
 
     args = parser.parse_args()
 
@@ -223,7 +241,8 @@ def main():
             # Process a single interaction
             agent.process_interaction(
                 duration=args.duration,
-                save_audio=args.save_audio
+                save_audio=args.save_audio,
+                audio_file=args.audio_file
             )
     except KeyboardInterrupt:
         print("\nStopping...")
