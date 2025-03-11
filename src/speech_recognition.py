@@ -41,7 +41,7 @@ class SpeechRecognizer:
 
     def load_audio(self, file_path: str) -> Tuple[np.ndarray, float]:
         """Load audio from file and resample if necessary."""
-        audio, sr = sf.read(file_path)
+        audio, sr = sf.read(file_path, dtype='float32')
         duration = len(audio) / sr
 
         if sr != self.sample_rate:
