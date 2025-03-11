@@ -46,62 +46,36 @@ class EmotionRecognizer:
             - dictionary of all emotion probabilities
         """
         try:
-            # Validate audio input
-            if audio is None or len(audio) == 0:
-                print("Warning: Empty audio input")
-                return "neutral", 1.0, {"neutral": 1.0}
-                
-            # Check for silent audio
-            if np.all(audio == 0) or np.allclose(audio, 0, atol=1e-7):
-                print("Warning: Silent audio detected")
-                return "neutral", 1.0, {"neutral": 1.0}
-                
-            # Extract features
-            features = self.extract_features(audio)
-            if features is None:
-                print("Warning: Could not extract features")
-                return "neutral", 1.0, {"neutral": 1.0}
-                
-            # Ensure audio is float32
-            if features.dtype != np.float32:
-                features = features.astype(np.float32)
+            if audio.dtype != np.float32:
+                audio = audio.astype(np.float32)
 
-            # Normalize audio if needed
-            max_abs = np.max(np.abs(features))
+            # 2) (Optional) Normalize amplitude
+            max_abs = np.max(np.abs(audio))
             if max_abs > 0:
-                features = features / max_abs
+                audio = audio / max_abs
 
-            # Extract features
+            # 3) Pass raw audio to Wav2Vec2
             inputs = self.feature_extractor(
-                features,
+                audio,  # raw waveform
                 sampling_rate=self.sample_rate,
                 return_tensors="pt",
-                padding=True,
-            )
-            inputs = {key: val.to(self.device) for key, val in inputs.items()}
+                padding=True
+            ).to(self.device)
 
-            # Get model predictions
+            # 4) Forward pass
             with torch.no_grad():
                 outputs = self.model(**inputs)
                 logits = outputs.logits
-                
-                # Check for NaN values
-                if torch.isnan(logits).any():
-                    print("Warning: NaN values detected in model output. Defaulting to neutral emotion.")
-                    return "neutral", 1.0, {"neutral": 1.0}
-                
                 probabilities = torch.nn.functional.softmax(logits, dim=-1)
+                predicted_id = torch.argmax(probabilities, dim=-1).item()
+                predicted_label = self.id2label[predicted_id]
+                confidence_score = probabilities[0][predicted_id].item()
 
-            # Get predicted label and confidence
-            predicted_id = torch.argmax(probabilities, dim=-1).item()
-            predicted_label = self.id2label[predicted_id]
-            confidence_score = probabilities[0][predicted_id].item()
-
-            # Get all emotion probabilities
-            emotion_probs = {
-                self.id2label[i]: prob.item()
-                for i, prob in enumerate(probabilities[0])
-            }
+                # All emotion probabilities
+                emotion_probs = {
+                    self.id2label[i]: prob.item()
+                    for i, prob in enumerate(probabilities[0])
+                }
 
             return predicted_label, confidence_score, emotion_probs
         except Exception as e:
