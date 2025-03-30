@@ -11,11 +11,12 @@ from database import Interaction, Entity
 class ForgettingModel:
     """Memory manager with Ebbinghaus forgetting curve implementation."""
 
+    ### placeholder forgetting model mostly
     def __init__(
             self,
             session_factory: sessionmaker,
-            decay_factor: 0.1,
-            retention_threshold: 0.3,
+            decay_factor: float = 0.1,
+            retention_threshold: float = 0.3
     ):
         self.session_factory = session_factory
         self.decay_factor = decay_factor

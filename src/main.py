@@ -349,7 +349,7 @@ def main():
                     save_audio=args.save_audio
                 )
         else:
-            # Process a single interaction or audio file (possibly in chunks)
+            # Process a single interaction or perhaps an audio file
             agent.process_interaction(
                 duration=args.duration,
                 save_audio=args.save_audio,
