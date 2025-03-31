@@ -27,3 +27,5 @@ flake8>=6.1.0
 python-dotenv>=1.0.0
 openai>=1.1.0
 sqlite-vec>=0.1.1
+
+pyttsx3==2.98

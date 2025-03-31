@@ -5,6 +5,7 @@ import argparse
 from typing import Optional, Dict, Any, Tuple
 from datetime import datetime
 import numpy as np
+from assistant_responses import AssistantResponder 
 
 from speech_recognition import SpeechRecognizer, print_available_devices, get_available_devices
 from entity_extraction import EntityExtractor
@@ -40,6 +41,7 @@ class SpeechAgent:
         self.memory_manager = ForgettingModel(self.db_session_factory)
         self.device_id = device_id
         self.current_session_id = None
+        self.assistant_responder = AssistantResponder(self.db_session_factory)
 
     def start_session(self, user_id: Optional[str] = None) -> None:
         """Start a new conversation session."""
@@ -207,25 +209,44 @@ class SpeechAgent:
             print(f"\nError in transcription: {str(e)}")
             transcript, transcript_confidence = "transcription failed", 0.0
 
-        # Store if transcription succeeded
         if transcript != "transcription failed":
-            # Store interaction and analyze entities
-            interaction = store_interaction(
+            # 1) Store the user interaction
+            user_interaction = store_interaction(
                 self.db_session_factory,
                 session_id=self.current_session_id,
                 transcript=transcript,
-                audio_duration=duration
+                audio_duration=duration,
+                role="user"  # <- We explicitly say it's from the user
             )
 
-            # Extract and store entities
-            _, important_entities = self.extract_and_store_entities(transcript, interaction.id)
+            # 2) Extract and store entities from the user’s transcript
+            _, important_entities = self.extract_and_store_entities(transcript, user_interaction.id)
 
-            # Update priority if needed
+            # Possibly mark user message as priority if it has important entities
             if important_entities:
-                update_interaction_priority(self.db_session_factory, interaction.id, True)
+                update_interaction_priority(self.db_session_factory, user_interaction.id, True)
                 print("Marked as important interaction!")
 
-            print(f"\nStored interaction with ID: {interaction.id}")
+            print(f"\nStored interaction with ID: {user_interaction.id}")
+
+            # 3) Generate the assistant's response using the entire conversation so far
+            assistant_text = self.assistant_responder.get_response(self.current_session_id)
+
+
+            # 4) Store the assistant response as a new interaction with role="assistant"
+            assistant_interaction = store_interaction(
+                self.db_session_factory,
+                session_id=self.current_session_id,
+                transcript=assistant_text,
+                audio_duration=0.0,  # or None
+                role="assistant"
+            )
+
+            # 5) Print the assistant’s response to the console
+            print(f"\nAgent: {assistant_text}")
+
+            self.assistant_responder.speak_response(assistant_text)
+
         else:
             print("\nSkipping storage due to failed transcription")
 
@@ -233,7 +254,7 @@ class SpeechAgent:
         if self.rag and transcript != "transcription failed":
             self.rag.store_interaction_embedding(
                 self.current_session_id,
-                interaction.id,
+                user_interaction.id,
                 transcript
             )
 

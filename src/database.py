@@ -35,6 +35,8 @@ class Interaction(Base):
     session = relationship("Session", back_populates="interactions")
     entities = relationship("Entity", back_populates="interaction", cascade="all, delete-orphan")
 
+    role = Column(String, default="user")  # can be "user" or "assistant"
+
 
 class Entity(Base):
     """Model for storing entities extracted from conversations."""
@@ -96,7 +98,8 @@ def store_interaction(
         session_id: int,
         transcript: str,
         audio_duration: Optional[float] = None,
-        priority: bool = False
+        priority: bool = False,
+        role: str = "user"
 ) -> Interaction:
     """Store a new interaction in the database with priority flag."""
     db_session = session_factory()
@@ -106,7 +109,8 @@ def store_interaction(
             session_id=session_id,
             transcript=transcript,
             audio_duration=audio_duration,
-            priority=priority
+            priority=priority,
+            role=role
         )
         db_session.add(interaction)
         db_session.commit()
@@ -121,7 +125,8 @@ def store_interaction(
             timestamp=interaction.timestamp,
             transcript=interaction.transcript,
             audio_duration=interaction.audio_duration,
-            priority=interaction.priority
+            priority=interaction.priority,
+            role=interaction.role
         )
         return detached_interaction
     finally:
